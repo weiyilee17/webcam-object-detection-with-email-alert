@@ -1,5 +1,8 @@
 import cv2
 from time import sleep
+from collections import deque
+
+from emailing import send_email
 
 # 0 means the main camera. For laptops, that is the integrated one
 video = cv2.VideoCapture(0)
@@ -8,6 +11,8 @@ video = cv2.VideoCapture(0)
 sleep(1)
 
 first_frame = None
+
+object_entered_status_queue = deque(['no motion', 'no motion'])
 
 while True:
     check, original_frame = video.read()
@@ -38,17 +43,29 @@ while True:
 
     contours, hierarchy = cv2.findContours(dilation_frame, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
+    motion_status = 'no motion'
+
     for single_contour in contours:
         # if single_contour is a fake object(background light differences)
         # 5000 is a value that comes from trial and error
-        if cv2.contourArea(single_contour) < 5_000:
+        if cv2.contourArea(single_contour) < 10_000:
             continue
 
         # x, y being the coordinates of the top left point of the rectangle
         x, y, width, height = cv2.boundingRect(single_contour)
 
         # Third argument being the color of the rectangle, forth being the width
-        cv2.rectangle(original_frame, (x, y), (x + width, y + height), (0, 255, 0), 3)
+        motion_rectangle = cv2.rectangle(original_frame, (x, y), (x + width, y + height), (0, 255, 0), 3)
+
+        if motion_rectangle.any():
+            motion_status = 'object entered'
+
+    object_entered_status_queue.append(motion_status)
+    object_entered_status_queue.popleft()
+
+    if object_entered_status_queue[0] == 'object entered' and object_entered_status_queue[1] == 'no motion':
+        send_email()
+    print(object_entered_status_queue)
 
     cv2.imshow('MacBook Pro Camera', original_frame)
 
