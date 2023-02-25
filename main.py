@@ -3,6 +3,7 @@ from time import sleep
 from collections import deque
 from glob import glob
 from os import remove
+from threading import Thread
 
 from emailing import send_email
 
@@ -86,8 +87,26 @@ while True:
         )
         middle_image_file_path = sorted_file_paths[image_index // 2]
 
-        send_email(middle_image_file_path)
-        clean_folder()
+        with open(middle_image_file_path, 'rb') as file:
+            content = file.read()
+
+            # The reason doing it this way is to prevent cleaning the folder before the email is sent, so store the
+            # image content in memory first.
+            # TODO: see if there is a better way to do this in the future
+
+            # Writing send_email(middle_image_file_path) would cause the video to freeze when sending email, thus use
+            # Thread to send email in the background.
+            # (middle_image_file_path) is the same as middle_image_file_path, so we use
+            # (middle_image_file_path,) to make it a tuple
+            email_thread = Thread(target=send_email, args=(content, file.name))
+            email_thread.daemon = True
+
+        # clean_folder()
+        clean_folder_thread = Thread(target=clean_folder)
+        clean_folder_thread.daemon = True
+
+        email_thread.start()
+        clean_folder_thread.start()
 
     cv2.imshow('MacBook Pro Camera', original_frame)
 
