@@ -1,6 +1,8 @@
 import cv2
 from time import sleep
 from collections import deque
+from glob import glob
+from os import remove
 
 from emailing import send_email
 
@@ -11,6 +13,16 @@ video = cv2.VideoCapture(0)
 sleep(1)
 
 first_frame = None
+
+image_index = 0
+
+
+def clean_folder():
+    all_images = glob('images/*.png')
+
+    for single_image in all_images:
+        remove(single_image)
+
 
 object_entered_status_queue = deque(['no motion', 'no motion'])
 
@@ -47,7 +59,7 @@ while True:
 
     for single_contour in contours:
         # if single_contour is a fake object(background light differences)
-        # 5000 is a value that comes from trial and error
+        # 10_000 is a value that comes from trial and error
         if cv2.contourArea(single_contour) < 10_000:
             continue
 
@@ -60,12 +72,22 @@ while True:
         if motion_rectangle.any():
             motion_status = 'object entered'
 
+            cv2.imwrite(f'images/image{image_index}.png', original_frame)
+            image_index += 1
+
     object_entered_status_queue.append(motion_status)
     object_entered_status_queue.popleft()
 
     if object_entered_status_queue[0] == 'object entered' and object_entered_status_queue[1] == 'no motion':
-        send_email()
-    print(object_entered_status_queue)
+        all_images_file_path = glob('images/*.png')
+        sorted_file_paths = sorted(
+            all_images_file_path,
+            key=lambda single_file_path: int(single_file_path.strip('images/image.png'))
+        )
+        middle_image_file_path = sorted_file_paths[image_index // 2]
+
+        send_email(middle_image_file_path)
+        clean_folder()
 
     cv2.imshow('MacBook Pro Camera', original_frame)
 
